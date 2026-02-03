@@ -1,24 +1,23 @@
 from flask import Flask, render_template, request, redirect, url_for
-import json
+from flask_sqlalchemy import SQLAlchemy
 import os
 
 app = Flask(__name__)
+app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'mysql+pymysql://root:@localhost:3306/notes')
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+db = SQLAlchemy(app)
 
-NOTES_FILE = 'notes.json'
+class Note(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.String(100), nullable=False)
+    content = db.Column(db.Text, nullable=False)
 
-def load_notes():
-    if os.path.exists(NOTES_FILE):
-        with open(NOTES_FILE, 'r') as f:
-            return json.load(f)
-    return []
-
-def save_notes(notes):
-    with open(NOTES_FILE, 'w') as f:
-        json.dump(notes, f)
+with app.app_context():
+    db.create_all()
 
 @app.route('/')
 def index():
-    notes = load_notes()
+    notes = Note.query.all()
     return render_template('index.html', notes=notes)
 
 @app.route('/add', methods=['POST'])
@@ -26,10 +25,10 @@ def add_note():
     title = request.form.get('title')
     content = request.form.get('content')
     if title and content:
-        notes = load_notes()
-        notes.append({'title': title, 'content': content})
-        save_notes(notes)
+        new_note = Note(title=title, content=content)
+        db.session.add(new_note)
+        db.session.commit()
     return redirect(url_for('index'))
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(host='0.0.0.0', debug=True)
